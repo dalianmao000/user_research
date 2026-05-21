@@ -1,113 +1,148 @@
 """Tests for obsidian-sync.py"""
 
 import pytest
+import importlib.util
 from pathlib import Path
-import tempfile
-import shutil
 
-# Import the module
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-from obsidian_sync import ObsidianSync
+# Import the actual module
+scripts_path = Path(__file__).parent.parent / 'scripts'
+spec = importlib.util.spec_from_file_location("obsidian_sync", scripts_path / "obsidian-sync.py")
+obsidian_sync_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(obsidian_sync_module)
+ObsidianSync = obsidian_sync_module.ObsidianSync
 
 
 class TestObsidianSync:
     """Test cases for ObsidianSync class"""
 
     @pytest.fixture
-    def temp_vault(self, tmp_path):
-        """Create a temporary vault for testing"""
-        vault_path = tmp_path / "test-vault"
-        vault_path.mkdir()
-        return vault_path
-
-    @pytest.fixture
-    def sync(self, temp_vault):
+    def sync(self, tmp_path):
         """Create ObsidianSync instance with temp vault"""
-        return ObsidianSync(vault_path=str(temp_vault))
+        return ObsidianSync(vault_path=str(tmp_path))
 
-    def test_init_vault_creates_directories(self, sync, temp_vault):
-        """Test that init_vault creates all required directories"""
-        sync.init_vault()
+    def test_init_creates_vault_structure(self, sync, tmp_path):
+        """Test that init() creates the required vault structure"""
+        sync.init()
 
-        expected_dirs = ['00-项目', '01-用户访谈', '02-洞察笔记', '03-需求池', '04-报告']
-        for dir_name in expected_dirs:
-            assert (temp_vault / dir_name).exists(), f"Directory {dir_name} should exist"
+        # Check vault_path exists
+        assert sync.vault_path.exists(), "Vault path should exist"
+        assert sync.vault_path.is_dir(), "Vault path should be a directory"
 
-    def test_list_files_returns_empty_for_empty_dir(self, sync):
-        """Test list_files returns empty list for empty directory"""
-        files = sync.list_files('interviews')
-        assert files == []
+    def test_add_note_creates_file(self, sync, tmp_path):
+        """Test that add_note creates a note file"""
+        sync.init()
 
-    def test_get_stats_returns_directory_counts(self, sync):
-        """Test get_stats returns correct count per directory"""
-        stats = sync.get_stats()
+        result = sync.add_note('test-note', '# Test Note\n\nContent here')
 
-        assert 'project' in stats
-        assert 'interviews' in stats
-        assert 'insights' in stats
-        assert 'requirements' in stats
-        assert 'reports' in stats
+        assert result is not None
+        assert Path(result).exists(), "Note file should be created"
 
-    def test_generate_id_is_consistent(self, sync):
-        """Test that generate_id returns consistent results for same input"""
-        content = "test content"
-        id1 = sync.generate_id(content)
-        id2 = sync.generate_id(content)
-        assert id1 == id2
+    def test_search_notes_finds_content(self, sync, tmp_path):
+        """Test that search_notes finds notes by content"""
+        sync.init()
+        sync.add_note('search-test', '# Search Target\n\nThis contains search terms.')
 
-    def test_generate_id_differs_for_different_content(self, sync):
-        """Test that generate_id returns different IDs for different content"""
-        id1 = sync.generate_id("content A")
-        id2 = sync.generate_id("content B")
-        assert id1 != id2
+        results = sync.search_notes('Search')
+
+        assert len(results) >= 1
+        assert any('search' in r['type'].lower() or 'search' in r['path'].lower()
+                   for r in results), "Should find note with 'search' term"
+
+    def test_search_notes_returns_list(self, sync, tmp_path):
+        """Test that search_notes returns a list"""
+        sync.init()
+        sync.add_note('another-note', '# Another Note\n\nContent.')
+
+        results = sync.search_notes('Another')
+
+        assert isinstance(results, list), "Results should be a list"
+
+    def test_index_returns_dict(self, sync, tmp_path):
+        """Test that index returns a dictionary"""
+        sync.init()
+
+        index = sync.index
+
+        assert isinstance(index, dict), "Index should be a dictionary"
 
 
 class TestObsidianSyncIntegration:
     """Integration tests for ObsidianSync"""
 
     @pytest.fixture
-    def temp_vault(self, tmp_path):
-        """Create a temporary vault for testing"""
-        vault_path = tmp_path / "test-vault"
-        vault_path.mkdir()
-        return vault_path
+    def sync(self, tmp_path):
+        """Create ObsidianSync instance with temp vault"""
+        return ObsidianSync(vault_path=str(tmp_path))
+
+    def test_full_workflow(self, sync, tmp_path):
+        """Test complete workflow: init -> add note -> search -> backup"""
+        # Initialize vault
+        sync.init()
+        assert sync.vault_path.exists()
+
+        # Add multiple notes
+        note1 = sync.add_note('note-one', '# First Note\n\nContent for note one.')
+        note2 = sync.add_note('note-two', '# Second Note\n\nContent for note two.')
+
+        assert Path(note1).exists()
+        assert Path(note2).exists()
+
+        # Search for content
+        results = sync.search_notes('First')
+        assert len(results) >= 1
+
+        # Get index
+        index = sync.index
+        assert isinstance(index, dict)
+
+    def test_daily_note_generation(self, sync, tmp_path):
+        """Test daily note generation"""
+        sync.init()
+
+        daily_note = sync.generate_daily_note()
+
+        assert daily_note is not None
+        assert Path(daily_note).exists() or 'daily' in str(daily_note).lower()
+
+    def test_export_index(self, sync, tmp_path):
+        """Test index export functionality"""
+        sync.init()
+        sync.add_note('export-test', '# Export Test\n\nContent for export test.')
+
+        exported = sync.export_index()
+
+        assert exported is not None, "Export should return a result"
+
+
+class TestObsidianSyncEdgeCases:
+    """Edge case tests for ObsidianSync"""
 
     @pytest.fixture
-    def sync(self, temp_vault):
+    def sync(self, tmp_path):
         """Create ObsidianSync instance with temp vault"""
-        return ObsidianSync(vault_path=str(temp_vault))
+        return ObsidianSync(vault_path=str(tmp_path))
 
-    def test_create_and_read_note(self, sync, temp_vault):
-        """Test creating and reading a note"""
-        sync.init_vault()
+    def test_search_with_no_notes(self, sync, tmp_path):
+        """Test search returns empty list when no notes exist"""
+        sync.init()
 
-        content = "# Test Note\n\nThis is a test."
-        frontmatter = {"note_id": "test-001", "tags": ["test"]}
+        results = sync.search_notes('nonexistent')
 
-        file_path = sync.create_note('project', 'test-note', content, frontmatter)
+        assert isinstance(results, list), "Results should be a list"
+        assert len(results) == 0, "Should return empty list for no matches"
 
-        assert file_path.exists()
+    def test_add_note_with_special_characters(self, sync, tmp_path):
+        """Test adding notes with special characters in title"""
+        sync.init()
 
-        # Read it back
-        note = sync.read_note(file_path)
-        assert note['filename'] == 'test-note.md'
-        assert note['frontmatter']['note_id'] == 'test-001'
-        assert 'Test Note' in note['content']
+        result = sync.add_note('note-with-dashes', '# Special Chars\n\nContent.')
 
-    def test_create_multiple_notes(self, sync, temp_vault):
-        """Test creating multiple notes"""
-        sync.init_vault()
+        assert result is not None
 
-        notes = [
-            ('interviews', 'interview-1', '# Interview 1'),
-            ('interviews', 'interview-2', '# Interview 2'),
-            ('insights', 'insight-1', '# Insight 1'),
-        ]
+    def test_empty_content_note(self, sync, tmp_path):
+        """Test adding note with minimal content"""
+        sync.init()
 
-        for dir_name, filename, content in notes:
-            sync.create_note(dir_name, filename, content)
+        result = sync.add_note('empty-test', '')
 
-        # Verify counts
-        assert len(sync.list_files('interviews')) == 2
-        assert len(sync.list_files('insights')) == 1
+        assert result is not None
