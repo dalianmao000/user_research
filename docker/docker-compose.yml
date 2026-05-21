@@ -1,0 +1,48 @@
+version: '3.8'
+services:
+  n8n:
+    image: n8nio/n8n
+    container_name: ur-n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./n8n/data:/home/node/.n8n
+    restart: unless-stopped
+    networks:
+      - ur-network
+
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    container_name: ur-weaviate
+    ports:
+      - "8080:8080"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 20
+      AUTHENTICATION_ANONYMOUS_ACCESS: true
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      ENABLE_MODULES: text2vec-transformers
+      TRANSFORMERS_INFERENCE_API: http://t2v-transformers:8080
+    volumes:
+      - ./weaviate/data:/var/lib/weaviate
+    restart: unless-stopped
+    networks:
+      - ur-network
+
+  postgres:
+    image: postgres:15
+    container_name: ur-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: uruser
+      POSTGRES_PASSWORD: urpass
+      POSTGRES_DB: userresearch
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - ur-network
+
+networks:
+  ur-network:
+    driver: bridge
