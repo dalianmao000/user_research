@@ -1,0 +1,9 @@
+{
+  "plugin-enabled": true,
+  "textgenerator": {
+    "enable": true,
+    "embeddingModel": "sentence-transformers/all-MiniLM-L6-v2",
+    "vectorDb": "weaviate",
+    "weaviateUrl": "http://localhost:8080"
+  }
+}
