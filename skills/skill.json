@@ -1,0 +1,37 @@
+{
+  "name": "user-research",
+  "version": "1.0.0",
+  "description": "用户研究 AI Agents 系统",
+  "commands": [
+    {
+      "name": "ur-start",
+      "description": "初始化项目工作区"
+    },
+    {
+      "name": "ur-interview",
+      "description": "分析用户访谈记录"
+    },
+    {
+      "name": "ur-requirements",
+      "description": "生成产品需求文档"
+    },
+    {
+      "name": "ur-usability",
+      "description": "辅助可用性测试设计"
+    },
+    {
+      "name": "ur-competitive",
+      "description": "竞品信息采集分析"
+    },
+    {
+      "name": "ur-report",
+      "description": "生成研究报告"
+    },
+    {
+      "name": "ur-insights",
+      "description": "跨项目知识检索"
+    }
+  ],
+  "author": "user",
+  "tags": ["user-research", "ai-agents", "product"]
+}
